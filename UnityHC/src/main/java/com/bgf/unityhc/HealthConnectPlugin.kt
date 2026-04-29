@@ -77,15 +77,17 @@ object HealthConnectPlugin {
         if (!gameObjectName.isNullOrEmpty()) {
             unityGameObject = gameObjectName
         }
-        try {
-            val unityPlayer = Class.forName("com.unity3d.player.UnityPlayer")
-            val act = unityPlayer.getField("currentActivity").get(null) as Activity
-            activity = act
-        } catch (e: Throwable) {
-            Log.e(TAG, "Failed to resolve UnityPlayer.currentActivity", e)
-            sendUnity(CB_INIT, errorJson("UnityPlayer not available: ${e.message}"))
+        val act = resolveCurrentActivity()
+        if (act == null) {
+            sendUnity(
+                CB_INIT,
+                errorJson("UnityPlayer.currentActivity not resolvable. Tried: " +
+                    UNITY_PLAYER_CLASSES.joinToString(", "))
+            )
             return
         }
+        activity = act
+        Log.i(TAG, "Resolved currentActivity = ${act.javaClass.name}")
         checkAvailability()
     }
 
@@ -291,18 +293,56 @@ object HealthConnectPlugin {
         }
     }
 
-    /** Send a JSON message back to Unity. Visible to other classes in this module. */
+    /**
+     * Send a JSON message back to Unity.
+     *
+     * In Unity 6 the static `UnitySendMessage` and `currentActivity` were
+     * moved from `com.unity3d.player.UnityPlayer` to
+     * `com.unity3d.player.UnityPlayerForActivityOrService`. We probe both
+     * locations so the bridge keeps working on Unity 2022 and Unity 6+.
+     */
     internal fun sendUnity(method: String, payload: String) {
-        try {
-            val unityPlayer = Class.forName("com.unity3d.player.UnityPlayer")
-            val send = unityPlayer.getMethod(
-                "UnitySendMessage",
-                String::class.java, String::class.java, String::class.java
-            )
-            send.invoke(null, unityGameObject, method, payload)
-        } catch (e: Throwable) {
-            Log.w(TAG, "UnitySendMessage($unityGameObject.$method) failed: ${e.message}")
+        for (className in UNITY_PLAYER_CLASSES) {
+            try {
+                val cls = Class.forName(className)
+                val send = cls.getMethod(
+                    "UnitySendMessage",
+                    String::class.java, String::class.java, String::class.java
+                )
+                send.invoke(null, unityGameObject, method, payload)
+                return
+            } catch (e: NoSuchMethodException) {
+                // try next candidate
+            } catch (e: ClassNotFoundException) {
+                // try next candidate
+            } catch (e: Throwable) {
+                Log.w(TAG, "$className.UnitySendMessage($unityGameObject.$method) failed: ${e.message}")
+            }
         }
+        Log.w(TAG, "UnitySendMessage delivery failed for $method on $unityGameObject; tried ${UNITY_PLAYER_CLASSES.joinToString()}")
+    }
+
+    /**
+     * Resolve the current foreground Activity exposed by the Unity Player.
+     * Tries Unity 6's `UnityPlayerForActivityOrService` first, then falls
+     * back to the legacy `UnityPlayer.currentActivity` field.
+     */
+    private fun resolveCurrentActivity(): Activity? {
+        for (className in UNITY_PLAYER_CLASSES) {
+            try {
+                val cls = Class.forName(className)
+                val field = cls.getField("currentActivity")
+                val value = field.get(null)
+                if (value is Activity) return value
+            } catch (e: NoSuchFieldException) {
+                // try next candidate
+            } catch (e: ClassNotFoundException) {
+                // try next candidate
+            } catch (e: Throwable) {
+                Log.w(TAG, "$className.currentActivity lookup failed: ${e.message}")
+            }
+        }
+        return null
     }
 
     private fun errorJson(message: String?): String =
@@ -313,6 +353,12 @@ object HealthConnectPlugin {
         for (s in this) arr.put(s)
         return arr
     }
+
+    // Order matters: Unity 6 first, legacy fallback second.
+    private val UNITY_PLAYER_CLASSES = listOf(
+        "com.unity3d.player.UnityPlayerForActivityOrService",
+        "com.unity3d.player.UnityPlayer",
+    )
 
     // Unity callback method names. Use these from your C# wrapper.
     const val CB_INIT = "OnHealthConnectInit"
