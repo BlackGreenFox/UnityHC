@@ -70,6 +70,19 @@ namespace BGF.UnityHC
         [Tooltip("Last raw JSON received from any callback. Useful for debugging.")]
         public TMP_Text rawJsonText;
 
+        [Tooltip("Scrolling on-screen log: every event, every Java Log.* and " +
+                 "every Unity Debug.Log* are appended here. Drop a TMP_Text " +
+                 "into a ScrollRect content for a live device-side console.")]
+        public TMP_Text logText;
+
+        [Tooltip("Maximum number of lines kept in `logText`. Older lines are " +
+                 "dropped to keep the TMP renderer responsive.")]
+        public int logHistorySize = 80;
+
+        [Tooltip("Mirror Unity's Debug.Log / LogWarning / LogError into the " +
+                 "on-screen log via Application.logMessageReceived.")]
+        public bool mirrorUnityDebugLogs = true;
+
         // ---------- events (raw JSON) ----------
 
         /// <summary>Fired after Init(): {"ok":true,"status":N} or {"ok":false,...}.</summary>
@@ -89,6 +102,10 @@ namespace BGF.UnityHC
 
         /// <summary>{"ok":true, ids:[...]} after Insert*().</summary>
         public event Action<string> OnInsert;
+
+        /// <summary>{"level":"I|W|E","tag":"HealthConnectPlugin","msg":"..."}
+        /// pushed from the Java plugin every time it logs.</summary>
+        public event Action<string> OnPluginLogMessage;
 
         // ---------- native bridge ----------
 
@@ -121,6 +138,16 @@ namespace BGF.UnityHC
             OnSummary          += HandleSummaryForUI;
             OnRecords          += HandleRawForUI;
             OnInsert           += HandleRawForUI;
+            OnPluginLogMessage += HandlePluginLogForUI;
+
+            if (mirrorUnityDebugLogs)
+                Application.logMessageReceived += HandleUnityLog;
+        }
+
+        void OnDestroy()
+        {
+            if (mirrorUnityDebugLogs)
+                Application.logMessageReceived -= HandleUnityLog;
         }
 
         IEnumerator Start()
@@ -273,6 +300,7 @@ namespace BGF.UnityHC
         void OnHealthSummaryReceived(string json) => OnSummary?.Invoke(json);
         void OnRecordsReceived(string json)       => OnRecords?.Invoke(json);
         void OnInsertResult(string json)          => OnInsert?.Invoke(json);
+        void OnPluginLog(string json)             => OnPluginLogMessage?.Invoke(json);
         // ReSharper restore UnusedMember.Local
 
         // ---------- UI plumbing ----------
@@ -331,12 +359,39 @@ namespace BGF.UnityHC
                 $"HR max:   {FormatHr(s.hrMax)} bpm");
         }
 
-        void HandleRawForUI(string json) => SetRaw(json);
+        void HandleRawForUI(string json)
+        {
+            SetRaw(json);
+            AppendLog("native", "json", json);
+        }
+
+        void HandlePluginLogForUI(string json)
+        {
+            var l = JsonUtility.FromJson<PluginLogMessage>(json);
+            if (l == null) return;
+            string level = string.IsNullOrEmpty(l.level) ? "I" : l.level;
+            AppendLog("java", level, l.msg);
+        }
+
+        void HandleUnityLog(string condition, string stackTrace, LogType type)
+        {
+            // Skip our own forwarded lines (they already contain a tag) to
+            // avoid duplicate entries when SetStatus also Debug.Logs.
+            if (condition != null && condition.StartsWith("[HealthConnect] ")) return;
+            string lvl = type switch
+            {
+                LogType.Error or LogType.Exception or LogType.Assert => "E",
+                LogType.Warning => "W",
+                _ => "I",
+            };
+            AppendLog("unity", lvl, condition);
+        }
 
         void SetStatus(string s)
         {
             if (statusText != null) statusText.text = s;
             Debug.Log("[HealthConnect] " + s);
+            AppendLog("status", "I", s);
         }
 
         void SetSummary(string s)
@@ -347,6 +402,19 @@ namespace BGF.UnityHC
         void SetRaw(string s)
         {
             if (rawJsonText != null) rawJsonText.text = s;
+        }
+
+        readonly System.Collections.Generic.Queue<string> _logBuffer =
+            new System.Collections.Generic.Queue<string>(128);
+
+        void AppendLog(string source, string level, string msg)
+        {
+            if (logText == null) return;
+            string line = $"[{Time.realtimeSinceStartup:F1}s {source}/{level}] {msg}";
+            _logBuffer.Enqueue(line);
+            int cap = Mathf.Max(8, logHistorySize);
+            while (_logBuffer.Count > cap) _logBuffer.Dequeue();
+            logText.text = string.Join("\n", _logBuffer);
         }
 
         static string FormatHr(double v) => v <= 0 ? "—" : v.ToString("F0");
@@ -383,6 +451,14 @@ namespace BGF.UnityHC
             public double hrAvg;
             public double hrMin;
             public double hrMax;
+        }
+
+        [Serializable]
+        class PluginLogMessage
+        {
+            public string level;
+            public string tag;
+            public string msg;
         }
     }
 }

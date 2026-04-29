@@ -87,7 +87,7 @@ object HealthConnectPlugin {
             return
         }
         activity = act
-        Log.i(TAG, "Resolved currentActivity = ${act.javaClass.name}")
+        pluginLog("I", "initFromUnity: GameObject='$unityGameObject', currentActivity='${act.javaClass.name}'")
         checkAvailability()
     }
 
@@ -262,7 +262,9 @@ object HealthConnectPlugin {
 
     private fun checkAvailability() {
         val act = activity ?: return
-        when (val status = HealthConnectClient.getSdkStatus(act, HEALTH_CONNECT_PACKAGE)) {
+        val status = HealthConnectClient.getSdkStatus(act, HEALTH_CONNECT_PACKAGE)
+        pluginLog("I", "HealthConnectClient.getSdkStatus() = $status")
+        when (status) {
             HealthConnectClient.SDK_UNAVAILABLE -> {
                 sendUnity(CB_INIT, errorJson("Health Connect not available"))
             }
@@ -272,6 +274,7 @@ object HealthConnectPlugin {
             }
             else -> {
                 client = HealthConnectClient.getOrCreate(act)
+                pluginLog("I", "HealthConnectClient ready")
                 sendUnity(
                     CB_INIT,
                     JSONObject().put("ok", true).put("status", status).toString()
@@ -302,6 +305,12 @@ object HealthConnectPlugin {
      * locations so the bridge keeps working on Unity 2022 and Unity 6+.
      */
     internal fun sendUnity(method: String, payload: String) {
+        if (sendUnityRaw(method, payload)) return
+        // Avoid recursing into pluginLog (which calls sendUnity again).
+        Log.w(TAG, "UnitySendMessage delivery failed for $method on $unityGameObject; tried ${UNITY_PLAYER_CLASSES.joinToString()}")
+    }
+
+    private fun sendUnityRaw(method: String, payload: String): Boolean {
         for (className in UNITY_PLAYER_CLASSES) {
             try {
                 val cls = Class.forName(className)
@@ -310,7 +319,7 @@ object HealthConnectPlugin {
                     String::class.java, String::class.java, String::class.java
                 )
                 send.invoke(null, unityGameObject, method, payload)
-                return
+                return true
             } catch (e: NoSuchMethodException) {
                 // try next candidate
             } catch (e: ClassNotFoundException) {
@@ -319,7 +328,29 @@ object HealthConnectPlugin {
                 Log.w(TAG, "$className.UnitySendMessage($unityGameObject.$method) failed: ${e.message}")
             }
         }
-        Log.w(TAG, "UnitySendMessage delivery failed for $method on $unityGameObject; tried ${UNITY_PLAYER_CLASSES.joinToString()}")
+        return false
+    }
+
+    /**
+     * Mirror a log line into Android logcat AND into Unity (so a host that
+     * has no adb access can render plugin logs straight onto a TMP_Text).
+     * Levels: "I", "W", "E".
+     */
+    internal fun pluginLog(level: String, msg: String, t: Throwable? = null) {
+        val full = if (t == null) msg else "$msg: ${t.javaClass.simpleName}: ${t.message}"
+        when (level) {
+            "E" -> if (t != null) Log.e(TAG, msg, t) else Log.e(TAG, msg)
+            "W" -> if (t != null) Log.w(TAG, msg, t) else Log.w(TAG, msg)
+            else -> Log.i(TAG, full)
+        }
+        val payload = JSONObject()
+            .put("level", level)
+            .put("tag", TAG)
+            .put("msg", full)
+            .toString()
+        // sendUnityRaw avoids the warning-log path of sendUnity to keep
+        // pluginLog cheap and free of recursion if delivery fails.
+        sendUnityRaw(CB_LOG, payload)
     }
 
     /**
@@ -334,10 +365,11 @@ object HealthConnectPlugin {
                 val field = cls.getField("currentActivity")
                 val value = field.get(null)
                 if (value is Activity) return value
+                Log.w(TAG, "$className.currentActivity returned ${value?.javaClass?.name ?: "null"}")
             } catch (e: NoSuchFieldException) {
-                // try next candidate
+                Log.w(TAG, "$className has no field 'currentActivity'")
             } catch (e: ClassNotFoundException) {
-                // try next candidate
+                Log.w(TAG, "$className not found in app classpath")
             } catch (e: Throwable) {
                 Log.w(TAG, "$className.currentActivity lookup failed: ${e.message}")
             }
@@ -367,4 +399,5 @@ object HealthConnectPlugin {
     const val CB_TODAY_SUMMARY = "OnHealthSummaryReceived"
     const val CB_RECORDS = "OnRecordsReceived"
     const val CB_INSERT = "OnInsertResult"
+    const val CB_LOG = "OnPluginLog"
 }
