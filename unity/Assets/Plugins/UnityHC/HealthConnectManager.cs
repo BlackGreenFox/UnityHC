@@ -140,17 +140,15 @@ namespace BGF.UnityHC
 
         public void Init()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("initFromUnity", gameObject.name);
-#else
-            OnInit?.Invoke("{\"ok\":false,\"error\":\"Not on Android\"}");
-#endif
+            SafeCall(p => p.CallStatic("initFromUnity", gameObject.name),
+                     OnInit, "initFromUnity");
         }
 
         public int GetSdkStatus()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            return Plugin.CallStatic<int>("getSdkStatus");
+            try { return Plugin.CallStatic<int>("getSdkStatus"); }
+            catch (Exception e) { Debug.LogException(e); return 1; }
 #else
             return 1; // SDK_UNAVAILABLE
 #endif
@@ -158,96 +156,111 @@ namespace BGF.UnityHC
 
         public void OpenHealthConnectInPlayStore()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("openHealthConnectInPlayStore");
-#endif
+            SafeCall(p => p.CallStatic("openHealthConnectInPlayStore"), null,
+                     "openHealthConnectInPlayStore");
         }
 
         public void RequestPermissions()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("requestPermissions");
-#else
-            OnPermissions?.Invoke("{\"ok\":false,\"error\":\"Not on Android\"}");
-#endif
+            SafeCall(p => p.CallStatic("requestPermissions"),
+                     OnPermissions, "requestPermissions");
         }
 
         public void HasAllPermissions()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("hasAllPermissions");
-#else
-            OnHasPermissions?.Invoke("{\"ok\":false,\"error\":\"Not on Android\"}");
-#endif
+            SafeCall(p => p.CallStatic("hasAllPermissions"),
+                     OnHasPermissions, "hasAllPermissions");
         }
 
         public void GetTodaySummary()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("getTodaySummary");
-#else
-            OnSummary?.Invoke("{\"ok\":false,\"error\":\"Not on Android\"}");
-#endif
+            SafeCall(p => p.CallStatic("getTodaySummary"),
+                     OnSummary, "getTodaySummary");
         }
 
         public void StartTracking(long intervalMillis = 3000L)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("startTracking", intervalMillis);
-#endif
+            SafeCall(p => p.CallStatic("startTracking", intervalMillis),
+                     OnSummary, "startTracking");
         }
 
         public void StopTracking()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("stopTracking");
-#endif
+            SafeCall(p => p.CallStatic("stopTracking"), null, "stopTracking");
         }
 
         /// <param name="recordType">"Steps", "HeartRate", "Distance",
         /// "ActiveCaloriesBurned", "TotalCaloriesBurned" (case-insensitive).</param>
         public void GetRecords(string recordType, long startMillis, long endMillis)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("getRecords", recordType, startMillis, endMillis);
-#else
-            OnRecords?.Invoke("{\"ok\":false,\"error\":\"Not on Android\"}");
-#endif
+            SafeCall(p => p.CallStatic("getRecords", recordType, startMillis, endMillis),
+                     OnRecords, "getRecords");
         }
 
         public void InsertSteps(long count, long startMillis, long endMillis)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("insertSteps", count, startMillis, endMillis);
-#endif
+            SafeCall(p => p.CallStatic("insertSteps", count, startMillis, endMillis),
+                     OnInsert, "insertSteps");
         }
 
         public void InsertHeartRate(long bpm, long timestampMillis)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("insertHeartRate", bpm, timestampMillis);
-#endif
+            SafeCall(p => p.CallStatic("insertHeartRate", bpm, timestampMillis),
+                     OnInsert, "insertHeartRate");
         }
 
         public void InsertDistance(double meters, long startMillis, long endMillis)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("insertDistance", meters, startMillis, endMillis);
-#endif
+            SafeCall(p => p.CallStatic("insertDistance", meters, startMillis, endMillis),
+                     OnInsert, "insertDistance");
         }
 
         public void InsertActiveCalories(double kcal, long startMillis, long endMillis)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("insertActiveCalories", kcal, startMillis, endMillis);
-#endif
+            SafeCall(p => p.CallStatic("insertActiveCalories", kcal, startMillis, endMillis),
+                     OnInsert, "insertActiveCalories");
         }
 
         public void InsertTotalCalories(double kcal, long startMillis, long endMillis)
         {
+            SafeCall(p => p.CallStatic("insertTotalCalories", kcal, startMillis, endMillis),
+                     OnInsert, "insertTotalCalories");
+        }
+
+        // Wraps every JNI call in a try/catch so a missing AAR or a Java
+        // exception is surfaced to the user instead of silently leaving the
+        // status text in "Initialising…". AndroidJavaClass is part of
+        // UnityEngine and compiles on every platform; the body simply isn't
+        // executed off-device.
+        void SafeCall(Action<AndroidJavaClass> body, Action<string> errorChannel, string label)
+        {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            Plugin.CallStatic("insertTotalCalories", kcal, startMillis, endMillis);
+            try
+            {
+                body(Plugin);
+            }
+            catch (AndroidJavaException eJava)
+            {
+                ReportNativeError(label, eJava, errorChannel);
+            }
+            catch (Exception e)
+            {
+                ReportNativeError(label, e, errorChannel);
+            }
+#else
+            errorChannel?.Invoke("{\"ok\":false,\"error\":\"Not on Android (" + label + ")\"}");
 #endif
+        }
+
+        void ReportNativeError(string label, Exception e, Action<string> errorChannel)
+        {
+            string msg = e.Message ?? e.GetType().Name;
+            // Strip newlines so the JSON stays single-line for TMP_Text.
+            msg = msg.Replace('\n', ' ').Replace('\r', ' ').Replace("\"", "'");
+            string json = "{\"ok\":false,\"error\":\"" + label + ": " + msg + "\"}";
+            Debug.LogError("[HealthConnect] " + label + " failed: " + e);
+            SetStatus("Native error in " + label + ": " + msg);
+            errorChannel?.Invoke(json);
         }
 
         // ---------- callbacks (invoked by UnityPlayer.UnitySendMessage) ----------

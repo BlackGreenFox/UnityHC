@@ -136,7 +136,28 @@ All payloads are JSON. Errors look like `{"ok":false,"error":"..."}`.
 
 ## Troubleshooting
 
-* **`HealthConnectClient.SDK_UNAVAILABLE`** → device runs Android < 13 or has no Health Connect provider. Library is min-SDK 33 so this should only happen on emulators without the Health Connect APK.
+### Status stuck at "Initialising Health Connect…"
+
+The C# wrapper called `Plugin.CallStatic("initFromUnity", ...)` but never received `OnHealthConnectInit` back. Most common causes, in order:
+
+1. **AAR not packaged into the APK.** Click `Assets/Plugins/Android/UnityHC.aar` in the Project window and verify in the Inspector:
+   - "Select platforms for plugin" → only **Android** is ticked (not Editor / Standalone / Any Platform).
+   - "Platform settings → CPU" → **ARMv7 / ARM64** (not "Editor").
+   The wrapper now wraps every JNI call in `try/catch` and prints `Native error in initFromUnity: java.lang.ClassNotFoundException: com.bgf.unityhc.HealthConnectPlugin` straight into `Status Text` if this happens.
+2. **Wrong GameObject name.** `UnityPlayer.UnitySendMessage` is name-based. The scene GameObject must be named exactly the string passed to `Init()` (default `HealthConnectManager`). Note the script's `Awake()` renames the GameObject to `gameObjectName` — so make sure that field hasn't been edited to something else.
+3. **No Health Connect provider.** On a "naked" emulator without Google Play Services, `HealthConnectClient.getSdkStatus()` returns `SDK_UNAVAILABLE`. You'll see `OnInit` fire with `{"ok":false,"error":"Health Connect not available"}`. Use a real Android 13+ device or call `OpenHealthConnectInPlayStore()` to install the provider.
+
+### Reading Android logcat
+
+```
+adb logcat -c
+# launch the app
+adb logcat -v time *:W Unity:V HealthConnectPlugin:V AndroidJavaException:V
+```
+
+The Kotlin side logs warnings under `HealthConnectPlugin`; Unity logs every `AndroidJavaException` and every `Debug.LogError` from this script.
+
+### Other
+
 * **`SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED`** → call `OpenHealthConnectInPlayStore()` to prompt the user to update.
-* **No callback received** → check the GameObject name in the scene is exactly the string passed to `Init()` (default: `HealthConnectManager`). `UnitySendMessage` is name-based.
 * **Permissions silently denied on second open** → on Android 14+, repeatedly denying a permission disables the dialog. The user has to grant it manually in Settings → Apps → Health Connect → Permissions.
