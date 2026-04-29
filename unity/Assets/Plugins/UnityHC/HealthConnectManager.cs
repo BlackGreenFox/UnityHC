@@ -30,6 +30,8 @@
 
 using System;
 using System.Collections;
+using System.IO;
+using System.Text;
 using TMPro;
 using UnityEngine;
 
@@ -82,6 +84,12 @@ namespace BGF.UnityHC
         [Tooltip("Mirror Unity's Debug.Log / LogWarning / LogError into the " +
                  "on-screen log via Application.logMessageReceived.")]
         public bool mirrorUnityDebugLogs = true;
+
+        [Tooltip("Also mirror every log line into a plain text file at " +
+                 "<persistentDataPath>/UnityHC-log.txt. The file is rewritten " +
+                 "on every launch so it never grows unbounded. Reachable from " +
+                 "a desktop via MTP at Android/data/<package>/files/.")]
+        public bool mirrorLogToFile = true;
 
         // ---------- events (raw JSON) ----------
 
@@ -142,6 +150,24 @@ namespace BGF.UnityHC
 
             if (mirrorUnityDebugLogs)
                 Application.logMessageReceived += HandleUnityLog;
+
+            // Reset the on-disk log file once per launch so old runs
+            // don't pollute the next debug session. Failures are
+            // non-fatal — just disable file mirroring.
+            if (mirrorLogToFile)
+            {
+                try
+                {
+                    _logFilePath = Path.Combine(Application.persistentDataPath, "UnityHC-log.txt");
+                    File.WriteAllText(_logFilePath,
+                        $"--- UnityHC log @ {DateTime.Now:yyyy-MM-dd HH:mm:ss} ---\n");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[HealthConnect] Disabling file log: " + e.Message);
+                    mirrorLogToFile = false;
+                }
+            }
         }
 
         void OnDestroy()
@@ -406,15 +432,25 @@ namespace BGF.UnityHC
 
         readonly System.Collections.Generic.Queue<string> _logBuffer =
             new System.Collections.Generic.Queue<string>(128);
+        string _logFilePath;
 
         void AppendLog(string source, string level, string msg)
         {
-            if (logText == null) return;
             string line = $"[{Time.realtimeSinceStartup:F1}s {source}/{level}] {msg}";
-            _logBuffer.Enqueue(line);
-            int cap = Mathf.Max(8, logHistorySize);
-            while (_logBuffer.Count > cap) _logBuffer.Dequeue();
-            logText.text = string.Join("\n", _logBuffer);
+
+            if (logText != null)
+            {
+                _logBuffer.Enqueue(line);
+                int cap = Mathf.Max(8, logHistorySize);
+                while (_logBuffer.Count > cap) _logBuffer.Dequeue();
+                logText.text = string.Join("\n", _logBuffer);
+            }
+
+            if (mirrorLogToFile && _logFilePath != null)
+            {
+                try { File.AppendAllText(_logFilePath, line + "\n", Encoding.UTF8); }
+                catch { /* swallow — disk full / perms etc. */ }
+            }
         }
 
         static string FormatHr(double v) => v <= 0 ? "—" : v.ToString("F0");

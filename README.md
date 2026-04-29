@@ -174,6 +174,38 @@ All payloads are JSON. Errors look like `{"ok":false,"error":"..."}`.
 
 ## Troubleshooting
 
+### App crashes on launch — how to read the stack trace without `adb`
+
+Add `android:name="com.bgf.unityhc.UnityHCCrashLoggerApplication"` to
+your `<application>` tag in `Assets/Plugins/Android/AndroidManifest.xml`:
+
+```xml
+<application
+    android:name="com.bgf.unityhc.UnityHCCrashLoggerApplication"
+    ...>
+    ...
+</application>
+```
+
+This installs a process-wide `Thread.UncaughtExceptionHandler` before
+your Unity Activity is created. Any fatal exception is dumped to TWO
+plain text files before the JVM dies:
+
+1. `/sdcard/Download/UnityHC-crash.txt` — open with any file manager,
+   no permissions needed (Android 10+).
+2. `Android/data/<your.package>/files/UnityHC-crash.txt` — reachable
+   from a desktop via USB / MTP.
+
+On the next successful launch, the plugin reads the dump and surfaces
+it in the on-screen `Log Text` (prefixed with `[…java/E] Previous
+crash recovered:`), then deletes the file. So in practice: build, run,
+crash, build again with the fix, and you'll see the previous stack.
+
+The C# wrapper additionally mirrors every log line (Unity Debug.* and
+Java Log.*) into `<Application.persistentDataPath>/UnityHC-log.txt`
+which lives at `Android/data/<your.package>/files/UnityHC-log.txt`.
+Disable via the `Mirror Log To File` toggle on `HealthConnectManager`.
+
 ### `NoClassDefFoundError: …/HealthPermission` at runtime
 
 You forgot step 5 above. Unity packed the `.aar` but not its
