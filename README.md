@@ -43,6 +43,29 @@ unity/Assets/Plugins/UnityHC/HealthConnectManager.cs   # C# bridge to drop into 
    exactly `HealthConnectManager` and attach `HealthConnectManager.cs`.
    The name is what `UnityPlayer.UnitySendMessage` uses to deliver
    callbacks back to C#.
+5. *(Optional, recommended for testing)* In Unity → **Window → TextMeshPro
+   → Import TMP Essentials**, then build a Canvas with three
+   `TextMeshProUGUI` components and drag them onto the
+   **Status Text / Summary Text / Raw JSON Text** slots of
+   `HealthConnectManager`. With **Auto Init On Start** and
+   **Auto Request Permissions On Start** enabled (default), the manager
+   will request Health Connect permissions on app launch and render the
+   summary on screen automatically — no extra C# code required.
+
+## Auto-start behaviour
+
+`HealthConnectManager` exposes four toggles in the Inspector:
+
+| Toggle | Default | What it does |
+|---|---|---|
+| `Auto Init On Start`                  | **true** | Calls `Init()` one frame after `Start()`. |
+| `Auto Request Permissions On Start`   | **true** | After Init succeeds, immediately calls `RequestPermissions()` to show the Health Connect permission dialog. |
+| `Auto Start Tracking After Grant`     | false    | After all permissions are granted, calls `StartTracking(intervalMillis)` so `OnSummary` fires periodically. |
+| `Tracking Interval Millis`            | 3000     | Polling interval used by `StartTracking()`. |
+
+If you want full manual control, untick the auto toggles and call
+`HealthConnectManager.Instance.Init()` / `RequestPermissions()` yourself
+from a button.
 
 ## Using the API from C#
 
