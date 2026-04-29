@@ -43,14 +43,52 @@ unity/Assets/Plugins/UnityHC/HealthConnectManager.cs   # C# bridge to drop into 
    exactly `HealthConnectManager` and attach `HealthConnectManager.cs`.
    The name is what `UnityPlayer.UnitySendMessage` uses to deliver
    callbacks back to C#.
-5. *(Optional, recommended for testing)* In Unity → **Window → TextMeshPro
-   → Import TMP Essentials**, then build a Canvas with three
+5. **Tell Unity about the AAR's transitive dependencies.** Unity does
+   *not* read the dependencies declared inside an `.aar` POM, so without
+   this step you will see at runtime:
+   ```
+   java.lang.NoClassDefFoundError: Failed resolution of:
+       Landroidx/health/connect/client/permission/HealthPermission;
+   ```
+   Pick **one** of the two options:
+
+   **Option A — Custom Main Gradle Template (no extra packages)**
+   1. Player Settings → Android → Publishing Settings → Build → tick
+      **Custom Main Gradle Template**.
+   2. Open the generated `Assets/Plugins/Android/mainTemplate.gradle`.
+   3. Inside the `dependencies { … }` block (just before the closing
+      `}`), add:
+      ```gradle
+      implementation 'androidx.health.connect:connect-client:1.1.0'
+      implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+      ```
+   A ready-made template is included in this repo at
+   [`unity/Assets/Plugins/Android/mainTemplate.gradle`](unity/Assets/Plugins/Android/mainTemplate.gradle)
+   if you'd rather copy it as-is.
+
+   **Option B — External Dependency Manager for Unity (EDM4U)**
+   1. Install EDM4U from
+      <https://github.com/googlesamples/unity-jar-resolver/releases>
+      (a `.unitypackage`).
+   2. Drop
+      [`unity/Assets/Plugins/UnityHC/Editor/UnityHCDependencies.xml`](unity/Assets/Plugins/UnityHC/Editor/UnityHCDependencies.xml)
+      into the same path of your Unity project.
+   3. **Assets → External Dependency Manager → Android Resolver →
+      Force Resolve.**
+   EDM4U will fetch the Health Connect client and the Kotlin coroutines
+   runtime from Google's Maven / Maven Central and pack them into the
+   APK on every Android build.
+
+6. *(Optional, recommended for testing)* In Unity → **Window → TextMeshPro
+   → Import TMP Essentials**, then build a Canvas with four
    `TextMeshProUGUI` components and drag them onto the
-   **Status Text / Summary Text / Raw JSON Text** slots of
+   **Status Text / Summary Text / Raw JSON Text / Log Text** slots of
    `HealthConnectManager`. With **Auto Init On Start** and
    **Auto Request Permissions On Start** enabled (default), the manager
    will request Health Connect permissions on app launch and render the
-   summary on screen automatically — no extra C# code required.
+   summary on screen automatically — no extra C# code required. The
+   **Log Text** slot mirrors every Java log line plus every Unity
+   `Debug.Log*` call, so you can debug on a device without `adb`.
 
 ## Auto-start behaviour
 
@@ -136,6 +174,13 @@ All payloads are JSON. Errors look like `{"ok":false,"error":"..."}`.
 
 ## Troubleshooting
 
+### `NoClassDefFoundError: …/HealthPermission` at runtime
+
+You forgot step 5 above. Unity packed the `.aar` but not its
+transitive dependencies. Enable **Custom Main Gradle Template** (or use
+EDM4U) and add the two `implementation` lines to your project's
+`Assets/Plugins/Android/mainTemplate.gradle`.
+
 ### Status stuck at "Initialising Health Connect…"
 
 The C# wrapper called `Plugin.CallStatic("initFromUnity", ...)` but never received `OnHealthConnectInit` back. Most common causes, in order:
@@ -144,8 +189,9 @@ The C# wrapper called `Plugin.CallStatic("initFromUnity", ...)` but never receiv
    - "Select platforms for plugin" → only **Android** is ticked (not Editor / Standalone / Any Platform).
    - "Platform settings → CPU" → **ARMv7 / ARM64** (not "Editor").
    The wrapper now wraps every JNI call in `try/catch` and prints `Native error in initFromUnity: java.lang.ClassNotFoundException: com.bgf.unityhc.HealthConnectPlugin` straight into `Status Text` if this happens.
-2. **Wrong GameObject name.** `UnityPlayer.UnitySendMessage` is name-based. The scene GameObject must be named exactly the string passed to `Init()` (default `HealthConnectManager`). Note the script's `Awake()` renames the GameObject to `gameObjectName` — so make sure that field hasn't been edited to something else.
-3. **No Health Connect provider.** On a "naked" emulator without Google Play Services, `HealthConnectClient.getSdkStatus()` returns `SDK_UNAVAILABLE`. You'll see `OnInit` fire with `{"ok":false,"error":"Health Connect not available"}`. Use a real Android 13+ device or call `OpenHealthConnectInPlayStore()` to install the provider.
+2. **Unity 6 reflection.** Unity 6.0+ moved `currentActivity` and `UnitySendMessage` from `com.unity3d.player.UnityPlayer` to `com.unity3d.player.UnityPlayerForActivityOrService`. The plugin already probes both classes and logs which one resolved (look for `initFromUnity: ... currentActivity='com.unity3d.player.UnityPlayerForActivityOrService'` in the on-screen log).
+3. **Wrong GameObject name.** `UnityPlayer.UnitySendMessage` is name-based. The scene GameObject must be named exactly the string passed to `Init()` (default `HealthConnectManager`). Note the script's `Awake()` renames the GameObject to `gameObjectName` — so make sure that field hasn't been edited to something else.
+4. **No Health Connect provider.** On a "naked" emulator without Google Play Services, `HealthConnectClient.getSdkStatus()` returns `SDK_UNAVAILABLE`. You'll see `OnInit` fire with `{"ok":false,"error":"Health Connect not available"}`. Use a real Android 13+ device or call `OpenHealthConnectInPlayStore()` to install the provider.
 
 ### Reading Android logcat
 

@@ -1,0 +1,70 @@
+// UnityHC sample mainTemplate.gradle
+//
+// Copy this file into your Unity project at:
+//   Assets/Plugins/Android/mainTemplate.gradle
+//
+// Then enable it in Player Settings → Android → Publishing Settings →
+// Build → "Custom Main Gradle Template" so Unity uses it during the
+// Android build. The placeholders surrounded by **...** are filled in
+// by Unity at build time — do NOT change them.
+//
+// The two `implementation` lines marked with `<-- UnityHC` are what
+// pulls Health Connect and the Kotlin coroutines runtime into the APK
+// so the UnityHC.aar can resolve its transitive dependencies.
+
+apply plugin: 'com.android.library'
+**APPLY_PLUGINS**
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+**DEPS**
+    implementation 'androidx.health.connect:connect-client:1.1.0'         // <-- UnityHC
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1' // <-- UnityHC
+}
+
+android {
+    ndkPath "**NDKPATH**"
+    namespace "**NAMESPACE**"
+
+    compileSdkVersion **APIVERSION**
+    buildToolsVersion '**BUILDTOOLS**'
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdkVersion **MINSDKVERSION**
+        targetSdkVersion **TARGETSDKVERSION**
+        ndk {
+            abiFilters **ABIFILTERS**
+        }
+        versionCode **VERSIONCODE**
+        versionName '**VERSIONNAME**'
+        consumerProguardFiles 'proguard-unity.txt'**USER_PROGUARD**
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+
+    aaptOptions {
+        noCompress = **NON_COMPRESSED_ASSETS**
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }**SIGN**
+
+    buildTypes {
+        debug {
+            minifyEnabled **MINIFY_DEBUG**
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-unity.txt'**USER_PROGUARD_DEBUG**
+            jniDebuggable true
+        }
+        release {
+            minifyEnabled **MINIFY_RELEASE**
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-unity.txt'**USER_PROGUARD_RELEASE**
+            signingConfig signingConfigs.debug
+        }
+    }**PACKAGING_OPTIONS****SPLITS**
+**BUILT_APK_LOCATION**
+}**SPLITS_VERSION_CODE****REPOSITORIES****SOURCE_BUILD_SETUP**
