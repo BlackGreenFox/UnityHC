@@ -25,7 +25,12 @@
         <repository>https://maven.google.com</repository>
       </repositories>
     </androidPackage>
-    <androidPackage spec="org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1">
+    <androidPackage spec="org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0">
+      <repositories>
+        <repository>https://repo.maven.apache.org/maven2/</repository>
+      </repositories>
+    </androidPackage>
+    <androidPackage spec="org.jetbrains.kotlin:kotlin-stdlib:2.2.10">
       <repositories>
         <repository>https://repo.maven.apache.org/maven2/</repository>
       </repositories>

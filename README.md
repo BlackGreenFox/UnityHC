@@ -60,8 +60,14 @@ unity/Assets/Plugins/UnityHC/HealthConnectManager.cs   # C# bridge to drop into 
       `}`), add:
       ```gradle
       implementation 'androidx.health.connect:connect-client:1.1.0'
-      implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+      implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+      implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.10'
       ```
+      The `kotlin-stdlib` line is required because the AAR is compiled
+      with Kotlin 2.2 and Unity bundles an older `kotlin-stdlib` that
+      lacks `kotlin.coroutines.jvm.internal.SpillingKt`. Skipping this
+      line surfaces as `NoClassDefFoundError: …/SpillingKt;` the first
+      time you call any coroutine-based plugin method.
    A ready-made template is included in this repo at
    [`unity/Assets/Plugins/Android/mainTemplate.gradle`](unity/Assets/Plugins/Android/mainTemplate.gradle)
    if you'd rather copy it as-is.
@@ -195,8 +201,23 @@ All payloads are JSON. Errors look like `{"ok":false,"error":"..."}`.
 
 You forgot step 5 above. Unity packed the `.aar` but not its
 transitive dependencies. Enable **Custom Main Gradle Template** (or use
-EDM4U) and add the two `implementation` lines to your project's
+EDM4U) and add the three `implementation` lines to your project's
 `Assets/Plugins/Android/mainTemplate.gradle`.
+
+### `NoClassDefFoundError: …/SpillingKt` after Init succeeds
+
+Init works (status=3) but the very first coroutine-backed call
+(`HasAllPermissions`, `GetTodaySummary`, `StartTracking`, …) crashes
+with `Lkotlin/coroutines/jvm/internal/SpillingKt`. Cause: you only
+added the Health Connect / kotlinx-coroutines lines to
+`mainTemplate.gradle`, not the third one. Add:
+
+```gradle
+implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.10'
+```
+
+This is the Kotlin 2.x runtime that the AAR was compiled against;
+Unity bundles an older `kotlin-stdlib` that doesn't carry `SpillingKt`.
 
 ### Status stuck at "Initialising Health Connect…"
 

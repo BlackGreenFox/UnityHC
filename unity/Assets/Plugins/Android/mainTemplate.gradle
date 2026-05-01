@@ -18,8 +18,9 @@ apply plugin: 'com.android.library'
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 **DEPS**
-    implementation 'androidx.health.connect:connect-client:1.1.0'         // <-- UnityHC
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1' // <-- UnityHC
+    implementation 'androidx.health.connect:connect-client:1.1.0'             // <-- UnityHC
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'   // <-- UnityHC
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.10'                // <-- UnityHC
 }
 
 android {
