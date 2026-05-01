@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  UnityHC native dependency manifest for the External Dependency Manager
+  for Unity (EDM4U / "Play Services Resolver"):
+    https://github.com/googlesamples/unity-jar-resolver
+
+  If your project already uses EDM4U (Firebase / AdMob / etc. plugins
+  bring it in transitively), this file is enough — Unity will fetch the
+  Health Connect Client library from Google's Maven and the Kotlin
+  coroutines runtime from Maven Central, and pack them into the APK.
+
+  After importing this file, run:
+    Assets → External Dependency Manager → Android Resolver → Force Resolve
+
+  Or just rebuild — automatic resolution runs by default.
+
+  If you do NOT use EDM4U, ignore this file and instead enable
+  "Custom Main Gradle Template" (Player Settings → Android → Publishing
+  Settings → Build) and add the dependencies manually. See README.md.
+-->
+<dependencies>
+  <androidPackages>
+    <androidPackage spec="androidx.health.connect:connect-client:1.1.0">
+      <repositories>
+        <repository>https://maven.google.com</repository>
+      </repositories>
+    </androidPackage>
+    <androidPackage spec="org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1">
+      <repositories>
+        <repository>https://repo.maven.apache.org/maven2/</repository>
+      </repositories>
+    </androidPackage>
+  </androidPackages>
+</dependencies>

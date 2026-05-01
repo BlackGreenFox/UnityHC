@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <uses-permission android:name="android.permission.health.READ_STEPS"/>
-    <uses-permission android:name="android.permission.health.WRITE_STEPS"/>
-    <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
-    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE"/>
 
+    <!--
+      All Health Connect permissions, the <queries> declaration and the
+      PermissionsRationale / PermissionUsage activities are merged in from
+      the :UnityHC library AAR. This module is the host app used only for
+      testing the AAR; it does not need to redeclare them here.
+    -->
 
     <application
         android:allowBackup="true"
@@ -15,44 +17,6 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.UnityHC" />
-    <activity
-        android:name=".PermissionsRationaleActivity"
-        android:exported="true">
-        <intent-filter>
-            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
-        </intent-filter>
-    </activity>
-    <activity-alias
-        android:name=".ViewPermissionUsageActivity"
-        android:exported="true"
-        android:targetActivity=".PermissionsRationaleActivity"
-        android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
-        <intent-filter>
-            <action android:name="android.intent.action.VIEW_PERMISSION_USAGE"/>
-            <category android:name="android.intent.category.HEALTH_PERMISSIONS"/>
-        </intent-filter>
-    </activity-alias>
-
-    <activity
-        android:name=".OnboardingActivity"
-        android:exported="true"
-        android:permission="com.google.android.apps.healthdata.permission.START_ONBOARDING">
-        <intent-filter>
-            <action android:name="androidx.health.ACTION_SHOW_ONBOARDING"/>
-        </intent-filter>
-    </activity>
-    <activity-alias
-        android:name=".UAndAboveOnboardingActivity"
-        android:exported="true"
-        android:targetActivity=".OnboardingActivity"
-        android:permission="android.permission.START_ONBOARDING">
-        <intent-filter>
-            <action android:name="android.intent.action.VIEW_PERMISSION_USAGE"/>
-            <category android:name="android.intent.category.HEALTH_PERMISSIONS"/>
-        </intent-filter>
-    </activity-alias>
-    <queries>
-        <package android:name="com.google.android.apps.healthdata"/>
-    </queries>
+        android:theme="@style/Theme.UnityHC"
+        tools:targetApi="33" />
 </manifest>
