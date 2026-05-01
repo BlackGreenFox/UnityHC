@@ -96,14 +96,31 @@ unity/Assets/Plugins/UnityHC/HealthConnectManager.cs   # C# bridge to drop into 
 
 | Toggle | Default | What it does |
 |---|---|---|
-| `Auto Init On Start`                  | **true** | Calls `Init()` one frame after `Start()`. |
-| `Auto Request Permissions On Start`   | **true** | After Init succeeds, immediately calls `RequestPermissions()` to show the Health Connect permission dialog. |
+| `Auto Init On Start`                  | **false** | Calls `Init()` one frame after `Start()`. |
+| `Auto Request Permissions On Start`   | **false** | After Init succeeds, immediately calls `RequestPermissions()` to show the Health Connect permission dialog. |
 | `Auto Start Tracking After Grant`     | false    | After all permissions are granted, calls `StartTracking(intervalMillis)` so `OnSummary` fires periodically. |
 | `Tracking Interval Millis`            | 3000     | Polling interval used by `StartTracking()`. |
 
-If you want full manual control, untick the auto toggles and call
-`HealthConnectManager.Instance.Init()` / `RequestPermissions()` yourself
-from a button.
+The auto toggles are **off by default** — the recommended flow is to
+drive each step from a UI Button so you can see exactly what happens
+when. `HealthConnectManager`'s public methods all take no arguments
+(or have sensible defaults), so they show up as targets in the
+`Button.OnClick()` dropdown directly:
+
+| Button label | Wire `OnClick` to |
+|---|---|
+| Init                       | `HealthConnectManager.Init()` |
+| Request permissions        | `HealthConnectManager.RequestPermissions()` |
+| Has all permissions        | `HealthConnectManager.HasAllPermissions()` |
+| Get today's summary        | `HealthConnectManager.GetTodaySummary()` |
+| Start tracking             | `HealthConnectManager.StartTracking()` |
+| Stop tracking              | `HealthConnectManager.StopTracking()` |
+| Open Play Store            | `HealthConnectManager.OpenHealthConnectInPlayStore()` |
+
+If you'd rather not touch the Inspector wiring, drop
+[`HealthConnectButtonsExample.cs`](unity/Assets/Plugins/UnityHC/HealthConnectButtonsExample.cs)
+onto any GameObject and assign `Button` references to its public
+fields — it does the wiring at runtime in `Start()`.
 
 ## Using the API from C#
 
@@ -173,38 +190,6 @@ To check current state without re-prompting use `HasAllPermissions()` → `OnHas
 All payloads are JSON. Errors look like `{"ok":false,"error":"..."}`.
 
 ## Troubleshooting
-
-### App crashes on launch — how to read the stack trace without `adb`
-
-Add `android:name="com.bgf.unityhc.UnityHCCrashLoggerApplication"` to
-your `<application>` tag in `Assets/Plugins/Android/AndroidManifest.xml`:
-
-```xml
-<application
-    android:name="com.bgf.unityhc.UnityHCCrashLoggerApplication"
-    ...>
-    ...
-</application>
-```
-
-This installs a process-wide `Thread.UncaughtExceptionHandler` before
-your Unity Activity is created. Any fatal exception is dumped to TWO
-plain text files before the JVM dies:
-
-1. `/sdcard/Download/UnityHC-crash.txt` — open with any file manager,
-   no permissions needed (Android 10+).
-2. `Android/data/<your.package>/files/UnityHC-crash.txt` — reachable
-   from a desktop via USB / MTP.
-
-On the next successful launch, the plugin reads the dump and surfaces
-it in the on-screen `Log Text` (prefixed with `[…java/E] Previous
-crash recovered:`), then deletes the file. So in practice: build, run,
-crash, build again with the fix, and you'll see the previous stack.
-
-The C# wrapper additionally mirrors every log line (Unity Debug.* and
-Java Log.*) into `<Application.persistentDataPath>/UnityHC-log.txt`
-which lives at `Android/data/<your.package>/files/UnityHC-log.txt`.
-Disable via the `Mirror Log To File` toggle on `HealthConnectManager`.
 
 ### `NoClassDefFoundError: …/HealthPermission` at runtime
 

@@ -88,21 +88,6 @@ object HealthConnectPlugin {
         }
         activity = act
         pluginLog("I", "initFromUnity: GameObject='$unityGameObject', currentActivity='${act.javaClass.name}'")
-
-        // Install the crash logger as a fallback (the dedicated
-        // Application subclass installs it earlier; this catches the
-        // case where the user has not wired up that Application class).
-        runCatching { UnityHCCrashLogger.install(act) }
-
-        // If the previous run died with an uncaught exception, dump
-        // the recorded stack trace into the on-screen log so the user
-        // can read it without adb.
-        val prior = runCatching { UnityHCCrashLogger.readLastCrash(act) }.getOrNull()
-        if (!prior.isNullOrBlank()) {
-            pluginLog("E", "Previous crash recovered:\n$prior")
-            runCatching { UnityHCCrashLogger.clearLastCrash(act) }
-        }
-
         checkAvailability()
     }
 
